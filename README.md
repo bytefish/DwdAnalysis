@@ -23,9 +23,8 @@ criteria applied:
 > mehr als 30 Grad hintereinander erreicht, sagte Thomas Kesseler-Lauterkorn, Meteorologe 
 > beim Deutschen Wetterdienst (DWD). ([Link SZ])
 
-So we are looking for a streak days with more than 30 degrees celsius, with at least 7 
-days for the stations *Bochum*, *Weilerswist-Lommersum* und *Tönisvorst*.
-
+So we are looking for a streak of at least 7 days, with an air temperature of at least 
+30 degrees celsius for the stations *Bochum*, *Weilerswist-Lommersum* und *Tönisvorst*.
 
 The Deutsche Wetterdienst (DWD) shares the measured temperatures with a 10 minute accuracy, 
 for both recent (`/recent`) and historical (`/historical`) measurements at:
