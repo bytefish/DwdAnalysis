@@ -842,71 +842,71 @@ I came up with the following SQL:
 -- given in 10 Minute accuracy. We are using TT_10 Measurement, which is the Air 
 -- Temperature 2m above the ground.
 WITH MaxTempByStationAndDay AS (
-	SELECT 
-		[StationID], CAST([MessDatum] AS DATE) AS [MessDatum], MAX([TT_10]) AS [Temperature]
-	FROM 
-		[dbo].[Messwert]
-	GROUP BY 
-		[StationID], CAST([MessDatum] AS DATE)
+    SELECT 
+        [StationID], CAST([MessDatum] AS DATE) AS [MessDatum], MAX([TT_10]) AS [Temperature]
+    FROM 
+        [dbo].[Messwert]
+    GROUP BY 
+        [StationID], CAST([MessDatum] AS DATE)
 ),
 -- Only Select the Days with more than 30 Degrees, according to 
 -- the metrics applied by the Süddeutsche Zeitung article.
 MaxTempByStationAndDayAbove30 AS (
-	SELECT 
-		[StationID], [MessDatum], [Temperature]
-	FROM 
-		[MaxTempByStationAndDay]
-	WHERE 
-		[Temperature] >= 30
+    SELECT 
+        [StationID], [MessDatum], [Temperature]
+    FROM 
+        [MaxTempByStationAndDay]
+    WHERE 
+        [Temperature] >= 30
 ),
 -- We want to find the consecutive days, so we are putting all measurements in a 
 -- DateGroup they belong to. 
 TemperatureGroups AS (
-	SELECT 
-		RANK() OVER (PARTITION BY [StationID] ORDER BY [MessDatum]) AS RowNumber
-		, [StationID]
-		, [MessDatum]
-		, DATEADD(day, -RANK() OVER (PARTITION BY [StationID] ORDER BY [MessDatum]), MessDatum) AS DateGroup
-		, [Temperature]
-		FROM [MaxTempByStationAndDayAbove30]
+    SELECT 
+        RANK() OVER (PARTITION BY [StationID] ORDER BY [MessDatum]) AS RowNumber
+        , [StationID]
+        , [MessDatum]
+        , DATEADD(day, -RANK() OVER (PARTITION BY [StationID] ORDER BY [MessDatum]), MessDatum) AS DateGroup
+        , [Temperature]
+        FROM [MaxTempByStationAndDayAbove30]
 ),
 -- We can now calculate the number of consecutive days, so 
 -- we can verify the results reported by DWD and SZ. 
 HeatStreaks AS (
-	SELECT 
-		[StationID]
-		, COUNT(*) AS [ConsecutiveDays]
-		, MIN([MessDatum]) AS [StartOfHeatStreak]
-		, MAX([MessDatum]) AS [EndOfHeatStreak]
-	FROM 
-		[TemperatureGroups]
-	GROUP BY 
-		[StationID], [DateGroup]
+    SELECT 
+        [StationID]
+        , COUNT(*) AS [ConsecutiveDays]
+        , MIN([MessDatum]) AS [StartOfHeatStreak]
+        , MAX([MessDatum]) AS [EndOfHeatStreak]
+    FROM 
+        [TemperatureGroups]
+    GROUP BY 
+        [StationID], [DateGroup]
 )
 SELECT 
-	station.Stationsname, station.Bundesland, heat_streak.* 
+    station.Stationsname, station.Bundesland, heat_streak.* 
 FROM 
-	[HeatStreaks] heat_streak
-		INNER JOIN [dbo].[Station] station ON heat_streak.StationID = station.StationID
+    [HeatStreaks] heat_streak
+        INNER JOIN [dbo].[Station] station ON heat_streak.StationID = station.StationID
 WHERE 
-	ConsecutiveDays >= 7
+    ConsecutiveDays >= 7
 ORDER BY 
-	Stationsname
+    Stationsname
 ```
 
 And we get the following results:
 
 ```
-Stationsname	                StationID	ConsecutiveDays	StartOfHeatStreak	EndOfHeatStreak
+Stationsname                    StationID    ConsecutiveDays    StartOfHeatStreak    EndOfHeatStreak
 
-Barsinghausen-Hohenbostel	    00294	        7	            2023-09-05	        2023-09-11
-Bochum	                        00555	        7	            2023-09-05	        2023-09-11
-Huy-Pabstorf	                06266	        7	            2023-09-05	        2023-09-11
-Mannheim	                    05906	        7	            2023-09-06	        2023-09-12
-Mergentheim, Bad-Neunkirchen	03257	        8	            2016-09-08	        2016-09-15
-Tönisvorst	                    05064	        7	            2023-09-05	        2023-09-11
-Waghäusel-Kirrlach	            05275	        9	            2023-09-04	        2023-09-12
-Weilerswist-Lommersum	        01327	        7	            2023-09-05	        2023-09-11
+Barsinghausen-Hohenbostel       00294            7                2023-09-05            2023-09-11
+Bochum                          00555            7                2023-09-05            2023-09-11
+Huy-Pabstorf                    06266            7                2023-09-05            2023-09-11
+Mannheim                        05906            7                2023-09-06            2023-09-12
+Mergentheim, Bad-Neunkirchen    03257            8                2016-09-08            2016-09-15
+Tönisvorst                      05064            7                2023-09-05            2023-09-11
+Waghäusel-Kirrlach              05275            9                2023-09-04            2023-09-12
+Weilerswist-Lommersum           01327            7                2023-09-05            2023-09-11
 ```
 
 ## Conclusion ##
