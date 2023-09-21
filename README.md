@@ -250,8 +250,8 @@ So there are a few things to note:
 * The field delimiter character is a semi-colon (`;`)
 * `STATIONS_ID` lacks the left-padded zeros.
 * `MESS_DATUM` has the date format `yyyyMMddHHmm`.
-* `PP_10`, `TT_10`, TM5_10`, `RF_10`, `TD_10` are given in an invariant culture.
-* `PP_10`, `TT_10`, TM5_10`, `RF_10`, `TD_10` represent missing values with `-999`.
+* `PP_10`, `TT_10`, `TM5_10`, `RF_10`, `TD_10` are given in an invariant culture.
+* `PP_10`, `TT_10`, `TM5_10`, `RF_10`, `TD_10` represent missing values with `-999`.
 
 And we can see in the files, that a simple `string.Split` will do. We don't need to take dependencies on CSV parsers.
 
