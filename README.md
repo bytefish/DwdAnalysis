@@ -75,50 +75,36 @@ all information about the weather station, such as the station name, measurement
 period or its exact location.
 
 ```sql
-IF NOT EXISTS (SELECT * FROM sys.objects 
-    WHERE object_id = OBJECT_ID(N'[dbo].[Station]') AND type in (N'U'))
-        
-BEGIN
-
-    CREATE TABLE [dbo].[Station](
-        [StationID]         [nchar](5) NOT NULL,
-        [DatumVon]          [datetime2](7) NULL,
-        [DatumBis]          [datetime2](7) NULL,
-        [Stationshoehe]     [real] NULL,
-        [GeoBreite]         [real] NULL,
-        [GeoLaenge]         [real] NULL,
-        [Stationsname]      [nvarchar](255) NULL,
-        [Bundesland]        [nvarchar](255) NULL,
-        CONSTRAINT [PK_Station] PRIMARY KEY CLUSTERED 
-        (
-            [StationID] ASC
-        )
-    ) ON [PRIMARY]
-   
-END
+CREATE TABLE [dbo].[Station](
+    [StationID]         [nchar](5) NOT NULL,
+    [DatumVon]          [datetime2](7) NULL,
+    [DatumBis]          [datetime2](7) NULL,
+    [Stationshoehe]     [real] NULL,
+    [GeoBreite]         [real] NULL,
+    [GeoLaenge]         [real] NULL,
+    [Stationsname]      [nvarchar](255) NULL,
+    [Bundesland]        [nvarchar](255) NULL,
+    CONSTRAINT [PK_Station] PRIMARY KEY CLUSTERED 
+    (
+        [StationID] ASC
+    )
+) ON [PRIMARY]
 ```
 
 The weather measurements are going into the table `[dbo].[Messwert]` and holds 
 all measurements given in the zipped CSV files:
 
 ```sql
-IF NOT EXISTS (SELECT * FROM sys.objects 
-    WHERE object_id = OBJECT_ID(N'[dbo].[Messwert]') AND type in (N'U'))
-
-BEGIN
-
-    CREATE TABLE [dbo].[Messwert](
-        [StationID]     [nchar](5) NOT NULL,
-        [MessDatum]     [datetime2](7) NOT NULL,
-        [QN]            [int] NULL,
-        [PP_10]         [real] NULL,
-        [TT_10]         [real] NULL,
-        [TM5_10]        [real] NULL,
-        [RF_10]         [real] NULL,
-        [TD_10]         [real] NULL
-    ) ON [PRIMARY]
-
-END
+CREATE TABLE [dbo].[Messwert](
+    [StationID]     [nchar](5) NOT NULL,
+    [MessDatum]     [datetime2](7) NOT NULL,
+    [QN]            [int] NULL,
+    [PP_10]         [real] NULL,
+    [TT_10]         [real] NULL,
+    [TM5_10]        [real] NULL,
+    [RF_10]         [real] NULL,
+    [TD_10]         [real] NULL
+) ON [PRIMARY]
 ```
 
 We then define the Table Types, that will be the input parameter for 
@@ -126,23 +112,16 @@ the Stored Procedures to come. The `[dbo].[udt_StationType]` is
 basically a one to one mapping to the `[dbo].[Station]` table.
 
 ```sql
-IF NOT EXISTS (SELECT * FROM   [sys].[table_types]
-    WHERE  user_type_id = Type_id(N'[dbo].[udt_StationType]'))
-     
-BEGIN
-
-    CREATE TYPE [dbo].[udt_StationType] AS TABLE (
-        [StationID]         [nchar](5),
-        [DatumVon]          [datetime2](7),
-        [DatumBis]          [datetime2](7),
-        [Stationshoehe]     [real],
-        [GeoBreite]         [real],
-        [GeoLaenge]         [real],
-        [Stationsname]      [nvarchar](255),
-        [Bundesland]        [nvarchar](255)
-    );
-
-END
+CREATE TYPE [dbo].[udt_StationType] AS TABLE (
+    [StationID]         [nchar](5),
+    [DatumVon]          [datetime2](7),
+    [DatumBis]          [datetime2](7),
+    [Stationshoehe]     [real],
+    [GeoBreite]         [real],
+    [GeoLaenge]         [real],
+    [Stationsname]      [nvarchar](255),
+    [Bundesland]        [nvarchar](255)
+);
 ```
 
 We'll define the `[dbo].[udt_MesswertType]` accordingly, which represents the 
@@ -150,23 +129,16 @@ weather measurements. Again it's a one to one mapping to the `[dbo].[Messwert]`
 table.
 
 ```sql
-IF NOT EXISTS (SELECT * FROM   [sys].[table_types]
-    WHERE  user_type_id = Type_id(N'[dbo].[udt_MesswertType]'))
-         
-BEGIN
-
-    CREATE TYPE [dbo].[udt_MesswertType] AS TABLE (
-        [StationID]     [nchar](5),
-        [MessDatum]     [datetime2](7),
-        [QN]            [int],
-        [PP_10]         [real],
-        [TT_10]         [real],
-        [TM5_10]        [real],
-        [RF_10]         [real],
-        [TD_10]         [real]
-    );
-
-EN
+CREATE TYPE [dbo].[udt_MesswertType] AS TABLE (
+    [StationID]     [nchar](5),
+    [MessDatum]     [datetime2](7),
+    [QN]            [int],
+    [PP_10]         [real],
+    [TT_10]         [real],
+    [TM5_10]        [real],
+    [RF_10]         [real],
+    [TD_10]         [real]
+);
 ```
 
 What's left is to define the Stored Procedures for inserting the measurements. I've initially 
