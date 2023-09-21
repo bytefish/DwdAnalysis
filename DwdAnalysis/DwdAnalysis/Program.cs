@@ -6,6 +6,7 @@ using Microsoft.Data.SqlClient.Server;
 using System.Data;
 using System.Globalization;
 using System.IO.Compression;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace DwdAnalysis
@@ -88,99 +89,73 @@ namespace DwdAnalysis
 
         static async Task Main(string[] args)
         {
+            // Clean up the Database
+            await ExecuteNonQueryAsync(ConnectionString, @"DROP PROCEDURE IF EXISTS [dbo].[usp_InsertStation];", default);
+            await ExecuteNonQueryAsync(ConnectionString, @"DROP PROCEDURE IF EXISTS [dbo].[usp_InsertMesswert];", default);
+
+            await ExecuteNonQueryAsync(ConnectionString, @"DROP TYPE IF EXISTS [dbo].[udt_StationType];", default);
+            await ExecuteNonQueryAsync(ConnectionString, @"DROP TYPE IF EXISTS [dbo].[udt_MesswertType];", default);
+            
+            await ExecuteNonQueryAsync(ConnectionString, @"DROP TABLE IF EXISTS [dbo].[Station];", default);
+            await ExecuteNonQueryAsync(ConnectionString, @"DROP TABLE IF EXISTS [dbo].[Messwert];", default);
+
             // Create Tables
             await ExecuteNonQueryAsync(ConnectionString, @"
-                IF NOT EXISTS (SELECT * FROM sys.objects 
-                    WHERE object_id = OBJECT_ID(N'[dbo].[Station]') AND type in (N'U'))
-         
-                BEGIN
-
-                    CREATE TABLE [dbo].[Station](
-                        [StationID]         [nchar](5) NOT NULL,
-                        [DatumVon]          [datetime2](7) NULL,
-                        [DatumBis]          [datetime2](7) NULL,
-                        [Stationshoehe]     [real] NULL,
-                        [GeoBreite]         [real] NULL,
-                        [GeoLaenge]         [real] NULL,
-                        [Stationsname]      [nvarchar](255) NULL,
-                        [Bundesland]        [nvarchar](255) NULL,
-                        CONSTRAINT [PK_Station] PRIMARY KEY CLUSTERED 
-                        (
-                            [StationID] ASC
-                        )
-                    ) ON [PRIMARY]
-    
-                END", default);
+                CREATE TABLE [dbo].[Station](
+                    [StationID]         [nchar](5) NOT NULL,
+                    [DatumVon]          [datetime2](7) NULL,
+                    [DatumBis]          [datetime2](7) NULL,
+                    [Stationshoehe]     [real] NULL,
+                    [GeoBreite]         [real] NULL,
+                    [GeoLaenge]         [real] NULL,
+                    [Stationsname]      [nvarchar](255) NULL,
+                    [Bundesland]        [nvarchar](255) NULL,
+                    CONSTRAINT [PK_Station] PRIMARY KEY CLUSTERED 
+                    (
+                        [StationID] ASC
+                    )
+                ) ON [PRIMARY]", default);
 
             await ExecuteNonQueryAsync(ConnectionString, @"
-                IF NOT EXISTS (SELECT * FROM sys.objects 
-                    WHERE object_id = OBJECT_ID(N'[dbo].[Messwert]') AND type in (N'U'))
-         
-                BEGIN
-
-                    CREATE TABLE [dbo].[Messwert](
-                        [StationID]     [nchar](5) NOT NULL,
-                        [MessDatum]     [datetime2](7) NOT NULL,
-                        [QN]            [int] NULL,
-                        [PP_10]         [real] NULL,
-                        [TT_10]         [real] NULL,
-                        [TM5_10]        [real] NULL,
-                        [RF_10]         [real] NULL,
-                        [TD_10]         [real] NULL
-                    ) ON [PRIMARY]
-
-                END", default);
+                CREATE TABLE [dbo].[Messwert](
+                    [StationID]     [nchar](5) NOT NULL,
+                    [MessDatum]     [datetime2](7) NOT NULL,
+                    [QN]            [int] NULL,
+                    [PP_10]         [real] NULL,
+                    [TT_10]         [real] NULL,
+                    [TM5_10]        [real] NULL,
+                    [RF_10]         [real] NULL,
+                    [TD_10]         [real] NULL
+                ) ON [PRIMARY]", default);
 
             // Create TVP Types
-            await ExecuteNonQueryAsync(ConnectionString, @"
-                IF NOT EXISTS (SELECT * FROM   [sys].[table_types]
-                    WHERE  user_type_id = Type_id(N'[dbo].[udt_StationType]'))
-                     
-                BEGIN
-                
-                    CREATE TYPE [dbo].[udt_StationType] AS TABLE (
-                        [StationID]         [nchar](5),
-                        [DatumVon]          [datetime2](7),
-                        [DatumBis]          [datetime2](7),
-                        [Stationshoehe]     [real],
-                        [GeoBreite]         [real],
-                        [GeoLaenge]         [real],
-                        [Stationsname]      [nvarchar](255),
-                        [Bundesland]        [nvarchar](255)
-                    );
-                
-                END", default);
+            await ExecuteNonQueryAsync(ConnectionString, @"                
+                CREATE TYPE [dbo].[udt_StationType] AS TABLE (
+                    [StationID]         [nchar](5),
+                    [DatumVon]          [datetime2](7),
+                    [DatumBis]          [datetime2](7),
+                    [Stationshoehe]     [real],
+                    [GeoBreite]         [real],
+                    [GeoLaenge]         [real],
+                    [Stationsname]      [nvarchar](255),
+                    [Bundesland]        [nvarchar](255)
+                );", default);
 
             await ExecuteNonQueryAsync(ConnectionString, @"
-                IF NOT EXISTS (SELECT * FROM   [sys].[table_types]
-                    WHERE  user_type_id = Type_id(N'[dbo].[udt_MesswertType]'))
-         
-                BEGIN
-
-                    CREATE TYPE [dbo].[udt_MesswertType] AS TABLE (
-                        [StationID]     [nchar](5),
-                        [MessDatum]     [datetime2](7),
-                        [QN]            [int],
-                        [PP_10]         [real],
-                        [TT_10]         [real],
-                        [TM5_10]        [real],
-                        [RF_10]         [real],
-                        [TD_10]         [real]
-                    );
-
-                END", default);
-
-            // Truncate data
-            await ExecuteNonQueryAsync(ConnectionString, "TRUNCATE TABLE [dbo].[Station]", default);
-            await ExecuteNonQueryAsync(ConnectionString, "TRUNCATE TABLE [dbo].[Messwert]", default);
-
-            // Create Indices
-            await ExecuteNonQueryAsync(ConnectionString, @"CREATE CLUSTERED COLUMNSTORE INDEX [CCI_Messwert] ON [dbo].[Messwert] WITH (DROP_EXISTING = ON)", default);
-            await ExecuteNonQueryAsync(ConnectionString, @"CREATE NONCLUSTERED INDEX [IX_Messwert_StationID_MessDatum] ON [dbo].[Messwert]([StationID], [MessDatum]) WITH (DROP_EXISTING = ON)", default);
+                CREATE TYPE [dbo].[udt_MesswertType] AS TABLE (
+                    [StationID]     [nchar](5),
+                    [MessDatum]     [datetime2](7),
+                    [QN]            [int],
+                    [PP_10]         [real],
+                    [TT_10]         [real],
+                    [TM5_10]        [real],
+                    [RF_10]         [real],
+                    [TD_10]         [real]
+                );", default);
 
             // Create Stored Procedures
             await ExecuteNonQueryAsync(ConnectionString, @"
-                 CREATE OR ALTER PROCEDURE [dbo].[usp_InsertStation]
+                 CREATE PROCEDURE [dbo].[usp_InsertStation]
                     @Entities [dbo].[udt_StationType] ReadOnly
                  AS
                  BEGIN
@@ -194,7 +169,7 @@ namespace DwdAnalysis
                  END", default);
 
             await ExecuteNonQueryAsync(ConnectionString, @"
-                CREATE OR ALTER PROCEDURE [dbo].[usp_InsertMesswert]
+                CREATE PROCEDURE [dbo].[usp_InsertMesswert]
                     @Entities [dbo].[udt_MesswertType] ReadOnly
                 AS
                 BEGIN
@@ -210,7 +185,8 @@ namespace DwdAnalysis
             // If the Data Directory is empty, then download all data files
             if (Directory.GetFiles(DataDirectory, "*.*").Length == 0)
             {
-                await DownloadDirectoryAsync(DataDirectory, default);
+                await DownloadFilesInDirectoryAsync("climate_environment/CDC/observations_germany/climate/10_minutes/air_temperature/historical", DataDirectory, default);
+                await DownloadFilesInDirectoryAsync("climate_environment/CDC/observations_germany/climate/10_minutes/air_temperature/recent", DataDirectory, default);
             }
 
             // The File with the DWD Station data.
@@ -268,7 +244,7 @@ namespace DwdAnalysis
             var regExpStation = new Regex("(?<stations_id>.{5})\\s(?<von_datum>.{8})\\s(?<bis_datum>.{8})\\s(?<stationshoehe>.{14})\\s(?<geo_breite>.{11})\\s(?<geo_laenge>.{9})\\s(?<stationsname>.{40})\\s(?<bundesland>.+)$", RegexOptions.Compiled);
 
             // Read all lines and extract the data into Station records
-            return File.ReadLines(stationsTextFilePath)
+            return File.ReadLines(stationsTextFilePath, encoding: Encoding.Latin1)
                 // Skip the Header
                 .Skip(2)
                 // Skip empty lines
@@ -506,13 +482,13 @@ namespace DwdAnalysis
             }
         }
 
-        static async Task DownloadDirectoryAsync(string targetDirectory, CancellationToken cancellationToken)
+        static async Task DownloadFilesInDirectoryAsync(string remoteDirectory, string targetDirectory, CancellationToken cancellationToken)
         {
             using (var conn = new AsyncFtpClient("ftp://opendata.dwd.de/"))
             {
                 await conn.Connect(cancellationToken);
 
-                var ftpListItems = await conn.GetListing("climate_environment/CDC/observations_germany/climate/10_minutes/air_temperature/historical", token: cancellationToken);
+                var ftpListItems = await conn.GetListing(remoteDirectory, token: cancellationToken);
 
                 var ftpFileItems = ftpListItems
                     .Where(x => x.Type == FtpObjectType.File)
