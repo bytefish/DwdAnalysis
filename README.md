@@ -23,6 +23,10 @@ criteria applied:
 > mehr als 30 Grad hintereinander erreicht, sagte Thomas Kesseler-Lauterkorn, Meteorologe 
 > beim Deutschen Wetterdienst (DWD). ([Link SZ])
 
+So we are looking for a streak days with more than 30 degrees celsius, with at least 7 
+days for the stations *Bochum*, *Weilerswist-Lommersum* und *Tönisvorst*.
+
+
 The Deutsche Wetterdienst (DWD) shares the measured temperatures with a 10 minute accuracy, 
 for both recent (`/recent`) and historical (`/historical`) measurements at:
 
@@ -117,10 +121,6 @@ BEGIN
 
 END
 ```
-
-Let's add a non-clustered index to `[dbo].[Messwert]([StationID], [MessDatum])`, so we can 
-speed up calculations. I don't add a clustered index here, because the data contains 
-duplicates and I don't want to introduce complexity.
 
 We then define the Table Types, that will be the input parameter for 
 the Stored Procedures to come. The `[dbo].[udt_StationType]` is 
