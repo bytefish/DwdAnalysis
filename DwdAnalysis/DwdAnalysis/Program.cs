@@ -11,61 +11,25 @@ using System.Text.RegularExpressions;
 
 namespace DwdAnalysis
 {
-    /// <summary>
-    /// Extensions for <see cref="SqlDataRecord"/>.
-    /// </summary>
-    public static class SqlDataRecordExtensions
-    {
-        /// <summary>
-        /// Sets the given float value, or null if none is given.
-        /// </summary>
-        /// <param name="sqlDataRecord">SqlDataRecord to set value for</param>
-        /// <param name="ordinal">Ordinal Number</param>
-        /// <param name="value">float value to set</param>
-        public static void SetNullableFloat(this SqlDataRecord sqlDataRecord, int ordinal, float? value)
-        {
-            if (value.HasValue)
-            {
-                sqlDataRecord.SetFloat(ordinal, value.Value);
-            }
-            else
-            {
-                sqlDataRecord.SetDBNull(ordinal);
-            }
-        }
-
-        /// <summary>
-        /// Sets the given DateTime value, or null if none is given.
-        /// </summary>
-        /// <param name="sqlDataRecord">SqlDataRecord to set value for</param>
-        /// <param name="ordinal">Ordinal Number</param>
-        /// <param name="value">float value to set</param>
-        public static void SetNullableDateTime(this SqlDataRecord sqlDataRecord, int ordinal, DateTime? value)
-        {
-            if (value.HasValue)
-            {
-                sqlDataRecord.SetDateTime(ordinal, value.Value);
-            }
-            else
-            {
-                sqlDataRecord.SetDBNull(ordinal);
-            }
-        }
-    }
-
     public class Program
     {
+        /// <summary>
+        /// Holds the Station Data.
+        /// </summary>
         private record Station(
-            string? StationID, 
-            DateTime? DatumVon, 
-            DateTime? DatumBis, 
-            float? Stationshoehe, 
+            string? StationID,
+            DateTime? DatumVon,
+            DateTime? DatumBis,
+            float? Stationshoehe,
             float? GeoBreite,
             float? GeoLaenge,
             string? Stationsname,
             string? Bundesland
         );
 
+        /// <summary>
+        /// Holds the Weather Measurements.
+        /// </summary>
         private record Messwert(
             string StationID,
             DateTime? MessDatum,
@@ -83,7 +47,7 @@ namespace DwdAnalysis
         private const string ConnectionString = @"Data Source=BYTEFISH\SQLEXPRESS;Integrated Security=true;Initial Catalog=DWD;TrustServerCertificate=Yes";
 
         /// <summary>
-        /// Data Directory with the TXT and zipped CSV files.
+        /// Data Directory to store and read from TXT and zipped CSV files.
         /// </summary>
         private const string DataDirectory = @"C:\Users\philipp\Datasets\DWD\";
 
@@ -95,7 +59,7 @@ namespace DwdAnalysis
 
             await ExecuteNonQueryAsync(ConnectionString, @"DROP TYPE IF EXISTS [dbo].[udt_StationType];", default);
             await ExecuteNonQueryAsync(ConnectionString, @"DROP TYPE IF EXISTS [dbo].[udt_MesswertType];", default);
-            
+
             await ExecuteNonQueryAsync(ConnectionString, @"DROP TABLE IF EXISTS [dbo].[Station];", default);
             await ExecuteNonQueryAsync(ConnectionString, @"DROP TABLE IF EXISTS [dbo].[Messwert];", default);
 
@@ -303,12 +267,12 @@ namespace DwdAnalysis
 
         private static bool IsValidMeasurement(string value)
         {
-            if(string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrWhiteSpace(value))
             {
                 return false;
             }
 
-            if(string.Equals(value, "-999", StringComparison.InvariantCultureIgnoreCase))
+            if (string.Equals(value, "-999", StringComparison.InvariantCultureIgnoreCase))
             {
                 return false;
             }
@@ -322,14 +286,14 @@ namespace DwdAnalysis
             {
                 var zipFileEntry = zipArchive.Entries[0];
 
-                using(var zipFileStream = zipFileEntry.Open())
+                using (var zipFileStream = zipFileEntry.Open())
                 {
                     using (StreamReader reader = new StreamReader(zipFileStream))
                     {
                         string? line = null;
 
-                        while ((line = reader.ReadLine()) != null) 
-                        { 
+                        while ((line = reader.ReadLine()) != null)
+                        {
                             yield return line;
                         }
                     }
@@ -340,7 +304,7 @@ namespace DwdAnalysis
         private static async Task WriteAsync(string connectionString, IEnumerable<Station> stations, CancellationToken cancellationToken)
         {
             var retryLogicProvider = GetExponentialBackoffProvider();
-            
+
             using (var conn = new SqlConnection(connectionString))
             {
                 // Open the Connection:
@@ -388,11 +352,11 @@ namespace DwdAnalysis
             foreach (var station in stations)
             {
                 sdr.SetString(0, station.StationID);
-                sdr.SetNullableDateTime(1, station.DatumVon);
-                sdr.SetNullableDateTime(2, station.DatumBis);
-                sdr.SetNullableFloat(3, station.Stationshoehe);
-                sdr.SetNullableFloat(4, station.GeoBreite);
-                sdr.SetNullableFloat(5, station.GeoLaenge);
+                SetNullableDateTime(sdr, 1, station.DatumVon);
+                SetNullableDateTime(sdr, 2, station.DatumBis);
+                SetNullableFloat(sdr, 3, station.Stationshoehe);
+                SetNullableFloat(sdr, 4, station.GeoBreite);
+                SetNullableFloat(sdr, 5, station.GeoLaenge);
                 sdr.SetString(6, station.Stationsname);
                 sdr.SetString(7, station.Bundesland);
 
@@ -451,13 +415,13 @@ namespace DwdAnalysis
             foreach (var station in stations)
             {
                 sdr.SetString(0, station.StationID);
-                sdr.SetNullableDateTime(1, station.MessDatum);
+                SetNullableDateTime(sdr, 1, station.MessDatum);
                 sdr.SetInt32(2, station.QN);
-                sdr.SetNullableFloat(3, station.PP_10);
-                sdr.SetNullableFloat(4, station.TT_10);
-                sdr.SetNullableFloat(5, station.TM5_10);
-                sdr.SetNullableFloat(6, station.RF_10);
-                sdr.SetNullableFloat(7, station.TD_10);
+                SetNullableFloat(sdr, 3, station.PP_10);
+                SetNullableFloat(sdr, 4, station.TT_10);
+                SetNullableFloat(sdr, 5, station.TM5_10);
+                SetNullableFloat(sdr, 6, station.RF_10);
+                SetNullableFloat(sdr, 7, station.TD_10);
 
                 yield return sdr;
             }
@@ -476,7 +440,7 @@ namespace DwdAnalysis
                     cmd.RetryLogicProvider = retryLogicProvider;
                     cmd.CommandType = CommandType.Text;
                     cmd.CommandText = sql;
-                    
+
                     await cmd.ExecuteNonQueryAsync(cancellationToken);
                 }
             }
@@ -542,6 +506,36 @@ namespace DwdAnalysis
             };
 
             return SqlConfigurableRetryFactory.CreateExponentialRetryProvider(options);
+        }
+
+        private static void SetNullableFloat(SqlDataRecord sqlDataRecord, int ordinal, float? value)
+        {
+            if (value.HasValue)
+            {
+                sqlDataRecord.SetFloat(ordinal, value.Value);
+            }
+            else
+            {
+                sqlDataRecord.SetDBNull(ordinal);
+            }
+        }
+
+        /// <summary>
+        /// Sets the given DateTime value, or null if none is given.
+        /// </summary>
+        /// <param name="sqlDataRecord">SqlDataRecord to set value for</param>
+        /// <param name="ordinal">Ordinal Number</param>
+        /// <param name="value">float value to set</param>
+        private static void SetNullableDateTime(SqlDataRecord sqlDataRecord, int ordinal, DateTime? value)
+        {
+            if (value.HasValue)
+            {
+                sqlDataRecord.SetDateTime(ordinal, value.Value);
+            }
+            else
+            {
+                sqlDataRecord.SetDBNull(ordinal);
+            }
         }
     }
 }
