@@ -50,6 +50,10 @@ All code can be found in the Git Repository at:
 
 ## Using SQL to find the Consecutive Heat Days ##
 
+In the following section we can see how to import the data using the DWD Open Data and .NET, but 
+to not get lost in technical details, let's assume the hardest part of writing the data to the 
+RDBMS is done.
+
 ### Understanding the Database Schema ##
 
 The database is going to have two tables 
@@ -90,10 +94,6 @@ CREATE TABLE [dbo].[Messwert](
     [TD_10]         [real] NULL
 ) ON [PRIMARY]
 ```
-
-In the following section we can see how to import the data using the DWD Open Data and .NET, 
-but to not get lost in technical details, let's assume the hardest part of writing the data 
-to the RDBMS is done. 
 
 We can now have fun with the data, Common Table Expressions (CTE) and WINDOW functions allow 
 to write a very clean query to identify heat streaks.
