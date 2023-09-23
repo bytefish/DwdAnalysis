@@ -1,11 +1,11 @@
 # Analyzing German Weather Data using Open Data, .NET and SQL #
 
-[Link DWD]: https://social.bund.de/@DeutscherWetterdienst/111051263708804194
-[Link SZ]: https://www.sueddeutsche.de/panorama/wetter-essen-sieben-hitzetage-am-stueck-september-rekord-an-nrw-stationen-dpa.urn-newsml-dpa-com-20090101-230911-99-154458
-
 This is the repository for the Article *Analyzing German Weather Data using Open Data, .NET and SQL*:
 
 * https://www.bytefish.de/blog/weather_data_timeseries_analysis.html
+
+[Link DWD]: https://social.bund.de/@DeutscherWetterdienst/111051263708804194
+[Link SZ]: https://www.sueddeutsche.de/panorama/wetter-essen-sieben-hitzetage-am-stueck-september-rekord-an-nrw-stationen-dpa.urn-newsml-dpa-com-20090101-230911-99-154458
 
 The Deutsche Wetterdienst (DWD) has recently shared an interesting quote, which reads:
 
@@ -46,6 +46,144 @@ record streaks.
 All code can be found in the Git Repository at:
 
 * [https://codeberg.org/bytefish/DwdAnalysis](https://codeberg.org/bytefish/DwdAnalysis)
+
+
+## Using SQL to find the Consecutive Heat Days ##
+
+### Understanding the Database Schema ##
+
+The database is going to have two tables 
+
+* `[dbo].[Station]` for the Stations
+* `[dbo].[Messwert]` for the Measurements
+
+In T-SQL the `[dbo].[Station]` table is created like this:
+
+```sql
+CREATE TABLE [dbo].[Station](
+    [StationID]         [nchar](5) NOT NULL,
+    [DatumVon]          [datetime2](7) NULL,
+    [DatumBis]          [datetime2](7) NULL,
+    [Stationshoehe]     [real] NULL,
+    [GeoBreite]         [real] NULL,
+    [GeoLaenge]         [real] NULL,
+    [Stationsname]      [nvarchar](255) NULL,
+    [Bundesland]        [nvarchar](255) NULL,
+    CONSTRAINT [PK_Station] PRIMARY KEY CLUSTERED 
+    (
+        [StationID] ASC
+    )
+) ON [PRIMARY]
+```
+
+In T-SQL the `[dbo].[Messwert]` table is created like this:
+
+```sql
+CREATE TABLE [dbo].[Messwert](
+    [StationID]     [nchar](5) NOT NULL,
+    [MessDatum]     [datetime2](7) NOT NULL,
+    [QN]            [int] NULL,
+    [PP_10]         [real] NULL,
+    [TT_10]         [real] NULL,
+    [TM5_10]        [real] NULL,
+    [RF_10]         [real] NULL,
+    [TD_10]         [real] NULL
+) ON [PRIMARY]
+```
+
+In the following section we can see how to import the data using the DWD Open Data and .NET, 
+but to not get lost in technical details, let's assume the hardest part of writing the data 
+to the RDBMS is done. 
+
+We can now have fun with the data, Common Table Expressions (CTE) and WINDOW functions allow 
+to write a very clean query to identify heat streaks.
+
+I came up with the following SQL:
+
+```sql
+-- Start by finding the maximum temperature per day, because the [MessDatum] is 
+-- given in 10 Minute accuracy. We are using TT_10 Measurement, which is the Air 
+-- Temperature 2m above the ground.
+WITH MaxTempByStationAndDay AS (
+    SELECT 
+        [StationID], CAST([MessDatum] AS DATE) AS [MessDatum], MAX([TT_10]) AS [Temperature]
+    FROM 
+        [dbo].[Messwert]
+    GROUP BY 
+        [StationID], CAST([MessDatum] AS DATE)
+),
+-- Only Select the Days with more than 30 Degrees, according to 
+-- the metrics applied by the Süddeutsche Zeitung article.
+MaxTempByStationAndDayAbove30 AS (
+    SELECT 
+        [StationID], [MessDatum], [Temperature]
+    FROM 
+        [MaxTempByStationAndDay]
+    WHERE 
+        [Temperature] >= 30
+),
+-- We want to find the consecutive days, so we are putting all measurements in a 
+-- DateGroup they belong to. 
+TemperatureGroups AS (
+    SELECT 
+        RANK() OVER (PARTITION BY [StationID] ORDER BY [MessDatum]) AS RowNumber
+        , [StationID]
+        , [MessDatum]
+        , DATEADD(day, -RANK() OVER (PARTITION BY [StationID] ORDER BY [MessDatum]), MessDatum) AS DateGroup
+        , [Temperature]
+        FROM [MaxTempByStationAndDayAbove30]
+),
+-- We can now calculate the number of consecutive days, so 
+-- we can verify the results reported by DWD and SZ. 
+HeatStreaks AS (
+    SELECT 
+        [StationID]
+        , COUNT(*) AS [ConsecutiveDays]
+        , MIN([MessDatum]) AS [StartOfHeatStreak]
+        , MAX([MessDatum]) AS [EndOfHeatStreak]
+    FROM 
+        [TemperatureGroups]
+    GROUP BY 
+        [StationID], [DateGroup]
+)
+SELECT 
+    station.Stationsname, station.Bundesland, heat_streak.* 
+FROM 
+    [HeatStreaks] heat_streak
+        INNER JOIN [dbo].[Station] station ON heat_streak.StationID = station.StationID
+WHERE 
+    ConsecutiveDays >= 7
+ORDER BY 
+    Stationsname
+```
+
+And we get the following results:
+
+```
+Stationsname                    StationID    ConsecutiveDays    StartOfHeatStreak    EndOfHeatStreak
+
+Barsinghausen-Hohenbostel       00294            7                2023-09-05            2023-09-11
+Bochum                          00555            7                2023-09-05            2023-09-11
+Huy-Pabstorf                    06266            7                2023-09-05            2023-09-11
+Mannheim                        05906            7                2023-09-06            2023-09-12
+Mergentheim, Bad-Neunkirchen    03257            8                2016-09-08            2016-09-15
+Tönisvorst                      05064            7                2023-09-05            2023-09-11
+Waghäusel-Kirrlach              05275            9                2023-09-04            2023-09-12
+Weilerswist-Lommersum           01327            7                2023-09-05            2023-09-11
+```
+
+### Conclusion ###
+
+We have been able to identify the consecutive days of extreme heat in September for the Stations 
+*Bochum*, *Tönisvorst* and *Weilerswist-Lommersum*. We can also see in the data, that 2023 is 
+indeed a record year, with only 2016 having a streak of at least 7 days.
+
+If you have ideas for more queries, let me know.
+
+
+## Open Data, SQL Server and .NET ## 
+
+In this section we will see how to import the DWD Open Data using an SQL Server and .NET.
 
 ### On Efficiently Importing Data to SQL Server ###
 
@@ -239,7 +377,7 @@ To communicate with the database we use ADO.NET. The .NET Framework always came 
 namespace, which implemented the ADO.NET for SQL Server. .NET Core also comes with it, but I strongly suggest to 
 use the modern `Microsoft.Data.SqlClient` instead.
 
-## Importing the DWD Data into a SQL Server Database ##
+### A .NET Console Application for Data Import ###
 
 The .NET Console Application puts all pieces together. It uses both dependencies we have to download 
 the files from the FTP Server and insert them to the SQL Server database. To limit the number of 
@@ -794,94 +932,7 @@ namespace DwdAnalysis
 }
 ```
 
-## Using SQL to find the Consecutive Heat Days ##
-
-Now that the hardest part of writing the data to the RDBMS is done, we can have fun with 
-the data. By using Common Table Expressions (CTE) and WINDOW Functions, we can write a 
-very clean query to identify streaks.
-
-I came up with the following SQL:
-
-```csharp
--- Start by finding the maximum temperature per day, because the [MessDatum] is 
--- given in 10 Minute accuracy. We are using TT_10 Measurement, which is the Air 
--- Temperature 2m above the ground.
-WITH MaxTempByStationAndDay AS (
-    SELECT 
-        [StationID], CAST([MessDatum] AS DATE) AS [MessDatum], MAX([TT_10]) AS [Temperature]
-    FROM 
-        [dbo].[Messwert]
-    GROUP BY 
-        [StationID], CAST([MessDatum] AS DATE)
-),
--- Only Select the Days with more than 30 Degrees, according to 
--- the metrics applied by the Süddeutsche Zeitung article.
-MaxTempByStationAndDayAbove30 AS (
-    SELECT 
-        [StationID], [MessDatum], [Temperature]
-    FROM 
-        [MaxTempByStationAndDay]
-    WHERE 
-        [Temperature] >= 30
-),
--- We want to find the consecutive days, so we are putting all measurements in a 
--- DateGroup they belong to. 
-TemperatureGroups AS (
-    SELECT 
-        RANK() OVER (PARTITION BY [StationID] ORDER BY [MessDatum]) AS RowNumber
-        , [StationID]
-        , [MessDatum]
-        , DATEADD(day, -RANK() OVER (PARTITION BY [StationID] ORDER BY [MessDatum]), MessDatum) AS DateGroup
-        , [Temperature]
-        FROM [MaxTempByStationAndDayAbove30]
-),
--- We can now calculate the number of consecutive days, so 
--- we can verify the results reported by DWD and SZ. 
-HeatStreaks AS (
-    SELECT 
-        [StationID]
-        , COUNT(*) AS [ConsecutiveDays]
-        , MIN([MessDatum]) AS [StartOfHeatStreak]
-        , MAX([MessDatum]) AS [EndOfHeatStreak]
-    FROM 
-        [TemperatureGroups]
-    GROUP BY 
-        [StationID], [DateGroup]
-)
-SELECT 
-    station.Stationsname, station.Bundesland, heat_streak.* 
-FROM 
-    [HeatStreaks] heat_streak
-        INNER JOIN [dbo].[Station] station ON heat_streak.StationID = station.StationID
-WHERE 
-    ConsecutiveDays >= 7
-ORDER BY 
-    Stationsname
-```
-
-And we get the following results:
-
-```
-Stationsname                    StationID    ConsecutiveDays    StartOfHeatStreak    EndOfHeatStreak
-
-Barsinghausen-Hohenbostel       00294            7                2023-09-05            2023-09-11
-Bochum                          00555            7                2023-09-05            2023-09-11
-Huy-Pabstorf                    06266            7                2023-09-05            2023-09-11
-Mannheim                        05906            7                2023-09-06            2023-09-12
-Mergentheim, Bad-Neunkirchen    03257            8                2016-09-08            2016-09-15
-Tönisvorst                      05064            7                2023-09-05            2023-09-11
-Waghäusel-Kirrlach              05275            9                2023-09-04            2023-09-12
-Weilerswist-Lommersum           01327            7                2023-09-05            2023-09-11
-```
 
 ## Conclusion ##
 
-We have been able to identify the consecutive days of extreme heat in September for the Stations 
-*Bochum*, *Tönisvorst* and *Weilerswist-Lommersum*. We can also see in the data, that 2023 is 
-indeed a record year, with only 2016 having a streak of at least 7 days.
-
-If you have ideas for more queries, let me know.
-
-## License ##
-
-The code in this repository is licensed under MIT License.
+And that's it. I hoped you enjoyed reading the article and learnt something new about Open Data, SQL Server or .NET!
