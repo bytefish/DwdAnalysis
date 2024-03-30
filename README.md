@@ -24,7 +24,7 @@ criteria applied:
 > beim Deutschen Wetterdienst (DWD). ([Link SZ])
 
 So we are looking for a streak of at least 7 days, with an air temperature of at least 
-30 degrees celsius for the stations *Bochum*, *Weilerswist-Lommersum* und *Tönisvorst*.
+30 degrees celsius for the stations *Bochum*, *Weilerswist-Lommersum* and *Tönisvorst*.
 
 The Deutsche Wetterdienst (DWD) shares the measured temperatures with a 10 minute accuracy, 
 for both recent (`/recent`) and historical (`/historical`) measurements at:
@@ -45,7 +45,7 @@ record streaks.
 
 All code can be found in the Git Repository at:
 
-* [https://codeberg.org/bytefish/DwdAnalysis](https://codeberg.org/bytefish/DwdAnalysis)
+* [https://github.com/bytefish/DwdAnalysis](https://github.com/bytefish/DwdAnalysis)
 
 
 ## Using SQL to find the Consecutive Heat Days ##
